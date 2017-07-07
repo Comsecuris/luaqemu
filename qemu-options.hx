@@ -4085,6 +4085,12 @@ DEF("no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip, "", QEMU_ARCH_I386)
 HXCOMM Deprecated (ignored)
 DEF("tdf", 0, QEMU_OPTION_tdf,"", QEMU_ARCH_ALL)
 
+DEF("lua", HAS_ARG, QEMU_OPTION_lua,
+"-lua scriptfile\n"
+"                Run Lua script using LuaJIT\n",
+QEMU_ARCH_ALL)
+
+
 DEF("msg", HAS_ARG, QEMU_OPTION_msg,
     "-msg timestamp[=on|off]\n"
     "                change the format of messages\n"

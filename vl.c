@@ -21,11 +21,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #include "qemu/osdep.h"
 #include "qemu-version.h"
 #include "qemu/cutils.h"
 #include "qemu/help_option.h"
 #include "qemu/uuid.h"
+
+#ifdef CONFIG_LUAJIT
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+#endif
 
 #ifdef CONFIG_SECCOMP
 #include "sysemu/seccomp.h"
@@ -144,6 +151,10 @@ int display_opengl;
 const char* keyboard_layout = NULL;
 ram_addr_t ram_size;
 const char *mem_path = NULL;
+#ifdef CONFIG_LUAJIT
+const char *lua_script = NULL;
+lua_State *lua_state = NULL;
+#endif /* CONFIG_LUAJIT */
 int mem_prealloc = 0; /* force preallocation of physical target memory */
 bool enable_mlock = false;
 int nb_nics;
@@ -4081,6 +4092,11 @@ int main(int argc, char **argv, char **envp)
                 }
                 enable_mlock = qemu_opt_get_bool(opts, "mlock", true);
                 break;
+#ifdef CONFIG_LUAJIT                
+            case QEMU_OPTION_lua:
+                lua_script = optarg;
+                break;
+#endif /* CONFIG_LUAJIT */                
             case QEMU_OPTION_msg:
                 opts = qemu_opts_parse_noisily(qemu_find_opts("msg"), optarg,
                                                false);

@@ -30,6 +30,7 @@
 #include "exec/tb-hash.h"
 #include "exec/log.h"
 #include "qemu/main-loop.h"
+#include "hw/arm/luaarm.h"
 #if defined(TARGET_I386) && !defined(CONFIG_USER_ONLY)
 #include "hw/i386/apic.h"
 #endif
@@ -149,6 +150,10 @@ static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, TranslationBlock *itb)
                            itb->tc_ptr, cpu->cpu_index, itb->pc,
                            lookup_symbol(itb->pc));
 
+    if (cpu->crs.miss_max != 0) {
+        record_cpu_state(cpu, 0);
+    }
+
 #if defined(DEBUG_DISAS)
     if (qemu_loglevel_mask(CPU_LOG_TB_CPU)
         && qemu_log_in_addr_range(itb->pc)) {
@@ -163,10 +168,17 @@ static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, TranslationBlock *itb)
 #endif /* DEBUG_DISAS */
 
     cpu->can_do_io = !use_icount;
+
+#ifdef CONFIG_LUAJIT
+    lua_cpu_exec_block_callback(itb->pc);
+#endif
     ret = tcg_qemu_tb_exec(env, tb_ptr);
     cpu->can_do_io = 1;
     last_tb = (TranslationBlock *)(ret & ~TB_EXIT_MASK);
     tb_exit = ret & TB_EXIT_MASK;
+#ifdef CONFIG_LUAJIT
+    lua_cpu_post_exec_block_callback(itb->pc);
+#endif
     trace_exec_tb_exit(last_tb, tb_exit);
 
     if (tb_exit > TB_EXIT_IDX1) {
@@ -379,7 +391,7 @@ static inline TranslationBlock *tb_find(CPUState *cpu,
     }
 #endif
     /* See if we can patch the calling TB. */
-    if (last_tb && !qemu_loglevel_mask(CPU_LOG_TB_NOCHAIN)) {
+    if (last_tb && !qemu_loglevel_mask(CPU_LOG_TB_NOCHAIN) && !cpu->crs.miss_max) {
         if (!have_tb_lock) {
             tb_lock();
             have_tb_lock = true;

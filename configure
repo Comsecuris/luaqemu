@@ -401,6 +401,7 @@ numa=""
 tcmalloc="no"
 jemalloc="no"
 replication="yes"
+luajit="no"
 vxhs=""
 
 supported_cpu="no"
@@ -481,8 +482,8 @@ ARFLAGS="${ARFLAGS-rv}"
 # left shift of signed integers is well defined and has the expected
 # 2s-complement style results. (Both clang and gcc agree that it
 # provides these semantics.)
-QEMU_CFLAGS="-fno-strict-aliasing -fno-common -fwrapv $QEMU_CFLAGS"
-QEMU_CFLAGS="-Wall -Wundef -Wwrite-strings -Wmissing-prototypes $QEMU_CFLAGS"
+QEMU_CFLAGS="-fno-strict-aliasing -rdynamic -fno-common -fwrapv $QEMU_CFLAGS"
+QEMU_CFLAGS="-Wall -Wno-unused-function -Wundef -Wwrite-strings -Wmissing-prototypes $QEMU_CFLAGS"
 QEMU_CFLAGS="-Wstrict-prototypes -Wredundant-decls $QEMU_CFLAGS"
 QEMU_CFLAGS="-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE $QEMU_CFLAGS"
 QEMU_INCLUDES="-I. -I\$(SRC_PATH) -I\$(SRC_PATH)/accel/tcg -I\$(SRC_PATH)/include"
@@ -1279,6 +1280,10 @@ for opt do
   ;;
   --enable-replication) replication="yes"
   ;;
+  --disable-luajit) luajit="no"
+  ;;
+  --enable-luajit) luajit="yes"
+  ;;
   --disable-vxhs) vxhs="no"
   ;;
   --enable-vxhs) vxhs="yes"
@@ -1511,6 +1516,7 @@ disabled with --disable-FEATURE, default is enabled if available:
   tcmalloc        tcmalloc support
   jemalloc        jemalloc support
   replication     replication support
+  luajit          LuaJIT support
   vhost-vsock     virtio sockets device support
   opengl          opengl support
   virglrenderer   virgl rendering support
@@ -2381,6 +2387,20 @@ x11_libs=-lX11
 if $pkg_config --exists "x11"; then
     x11_cflags=$($pkg_config --cflags x11)
     x11_libs=$($pkg_config --libs x11)
+fi
+
+##########################################
+
+# luajit probe
+if test "$luajit" != "no"; then
+    if $pkg_config --exists "luajit"; then
+	QEMU_CFLAGS="$QEMU_CFLAGS $($pkg_config --cflags luajit)"
+	libs_softmmu="$libs_softmmu $($pkg_config --libs luajit)"
+    elif test "$luajit" = "yes"; then
+        feature_not_found "luajit" "Install luajit devel"
+    else
+        luajit="no"
+    fi	
 fi
 
 ##########################################
@@ -5312,6 +5332,7 @@ echo "tcmalloc support  $tcmalloc"
 echo "jemalloc support  $jemalloc"
 echo "avx2 optimization $avx2_opt"
 echo "replication support $replication"
+echo "luajit support    $luajit"
 echo "VxHS block device $vxhs"
 
 if test "$sdl_too_old" = "yes"; then
@@ -5941,6 +5962,10 @@ fi
 
 if test "$replication" = "yes" ; then
   echo "CONFIG_REPLICATION=y" >> $config_host_mak
+fi
+
+if test "$luajit" = "yes" ; then
+  echo "CONFIG_LUAJIT=y" >> $config_host_mak
 fi
 
 if test "$have_af_vsock" = "yes" ; then

@@ -12,6 +12,12 @@
 #include "qemu/uuid.h"
 #include "qom/object.h"
 
+#ifdef CONFIG_LUAJIT
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+#endif
+
 /* vl.c */
 
 extern const char *bios_name;
@@ -159,6 +165,12 @@ void hmp_pcie_aer_inject_error(Monitor *mon, const QDict *qdict);
 #define MAX_SERIAL_PORTS 4
 
 extern Chardev *serial_hds[MAX_SERIAL_PORTS];
+
+#ifdef CONFIG_LUAJIT
+extern lua_State *lua_state;
+extern const char *lua_script;
+#endif
+
 
 /* parallel ports */
 

@@ -1107,7 +1107,12 @@ int rom_check_and_register_reset(void)
                     "(rom %s. free=0x" TARGET_FMT_plx
                     ", addr=0x" TARGET_FMT_plx ")\n",
                     rom->name, addr, rom->addr);
+#ifdef CONFIG_LUAJIT
+            fprintf(stderr, "lua-qemi: FIXME\n");
+            //return -1;
+#else
             return -1;
+#endif
         }
         addr  = rom->addr;
         addr += rom->romsize;

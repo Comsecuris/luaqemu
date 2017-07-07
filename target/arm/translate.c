@@ -23,6 +23,7 @@
 #include "cpu.h"
 #include "internals.h"
 #include "disas/disas.h"
+#include "hw/arm/luaarm.h"
 #include "exec/exec-all.h"
 #include "tcg-op.h"
 #include "qemu/log.h"
@@ -11989,6 +11990,21 @@ void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
             goto done_generating;
         }
 
+#ifdef CONFIG_LUAJIT
+        uint64_t insn_bytes;
+        if (dc->thumb) {
+            insn_bytes = arm_lduw_code(env, dc->pc, dc->sctlr_b);
+            if (insn_bytes >> 12 == 15 ||
+                (insn_bytes >> 12 == 14 && (insn_bytes & (1 << 11)))) { // thumb2, see disas_thumb2_insn use
+                insn_bytes = arm_ldl_code(env, dc->pc, dc->sctlr_b);
+            }
+        } else {
+            insn_bytes = arm_ldl_code(env, dc->pc, dc->sctlr_b);
+        }
+
+        lua_cpu_exec_insn_callback(dc->pc, insn_bytes);
+#endif
+
         if (dc->thumb) {
             disas_thumb_insn(env, dc);
             if (dc->condexec_mask) {
@@ -12170,6 +12186,27 @@ static const char *cpu_mode_names[16] = {
   "usr", "fiq", "irq", "svc", "???", "???", "mon", "abt",
   "???", "???", "hyp", "und", "???", "???", "???", "sys"
 };
+
+uint64_t arm_cpu_state_hash(CPUState *cs, int flags)
+{
+    ARMCPU *cpu = ARM_CPU(cs);
+    CPUARMState *env = &cpu->env;
+
+    int max_regs = !is_a64(env) ? sizeof(env->regs) / sizeof(env->regs[0]) : sizeof(env->xregs) / sizeof(env->xregs[0]);
+    uint64_t hash = !is_a64(env) ? env->regs[15] : env->pc;
+    int i = 0;
+
+    if (!is_a64(env)) {
+        for (; i < max_regs; i++) {
+            hash += env->regs[i];
+        }
+    } else {
+        for (; i < max_regs; i++) {
+            hash += env->xregs[i];
+        }
+    }
+    return hash;
+}
 
 void arm_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
                         int flags)

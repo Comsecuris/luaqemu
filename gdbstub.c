@@ -1353,6 +1353,11 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
 
 void gdb_set_stop_cpu(CPUState *cpu)
 {
+    /* BUGFIX: if we have breakpoints in the queue on running, cpus.c calls
+       gdb_set_stop_cpu irrespectively of whether gdbserver is used. As
+       a result, we'd run into a null pointer dereference here
+    */
+    if (!gdbserver_state) return;
     gdbserver_state->c_cpu = cpu;
     gdbserver_state->g_cpu = cpu;
 }
@@ -1392,7 +1397,16 @@ static void gdb_vm_state_change(void *opaque, int running, RunState state)
                      "T%02xthread:%02x;%swatch:" TARGET_FMT_lx ";",
                      GDB_SIGNAL_TRAP, cpu_index(cpu), type,
                      (target_ulong)cpu->watchpoint_hit->vaddr);
+
+/* the code assumes here that there is only one state change handler. if there is more,
+   setting cpu->watchpoint_hit to NULL here removes the direct way to detect whether RUN_STATE_DEBUG
+   hits a breakpoint or a watchpoint. so this is only done if the code is not compiled with luajit support
+   so that we have a chance to reuse the same in the state change handler. since the lua handler is always called
+   afterwards, we set it to NULL there.
+*/
+#ifndef CONFIG_LUAJIT
             cpu->watchpoint_hit = NULL;
+#endif
             goto send_packet;
         }
         tb_flush(cpu);

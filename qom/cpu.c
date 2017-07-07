@@ -253,6 +253,29 @@ void cpu_dump_state(CPUState *cpu, FILE *f, fprintf_function cpu_fprintf,
     }
 }
 
+void record_cpu_state(CPUState *cpu, int flags)
+{
+    CPUClass *cc = CPU_GET_CLASS(cpu);
+    uint64_t hash = 0;
+
+    if (cc->cpu_state_hash) {
+        hash = cc->cpu_state_hash(cpu, flags);
+        if (g_hash_table_contains(cpu->crs.cpu_states, GUINT_TO_POINTER(hash))) {
+            cpu->crs.miss_count++;
+            if (cpu->crs.miss_count >= cpu->crs.miss_max && cpu->crs.state_cb != NULL) {
+                cpu->crs.state_cb(cpu);
+            }
+        } else {
+            cpu->crs.ns++;
+            if (cpu->crs.ns >= cpu->crs.miss_max) {
+                g_hash_table_remove_all(cpu->crs.cpu_states);
+                cpu->crs.miss_count = 0;
+            }
+            g_hash_table_insert(cpu->crs.cpu_states, GUINT_TO_POINTER(hash), GUINT_TO_POINTER(hash));
+        }
+    }
+}
+
 void cpu_dump_statistics(CPUState *cpu, FILE *f, fprintf_function cpu_fprintf,
                          int flags)
 {
@@ -395,6 +418,13 @@ static void cpu_common_initfn(Object *obj)
     QTAILQ_INIT(&cpu->breakpoints);
     QTAILQ_INIT(&cpu->watchpoints);
 
+    cpu->crs.cpu_states = g_hash_table_new(g_direct_hash, g_direct_equal);
+    cpu->crs.state_cb = NULL;
+    cpu->crs.miss_max = 0;
+    cpu->crs.miss_count = 0;
+    cpu->crs.ns = 0;
+
+    cpu->trace_dstate = bitmap_new(trace_get_vcpu_event_count());
     count = trace_get_vcpu_event_count();
     if (count) {
         cpu->trace_dstate = bitmap_new(count);

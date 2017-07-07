@@ -139,6 +139,9 @@ static void arm_cpu_reset(CPUState *s)
         env->iwmmxt.cregs[ARM_IWMMXT_wCID] = 0x69051000 | 'Q';
     }
 
+    /* For LuaQEMU we want to be able to reset to non-0 addresses */
+    env->regs[15] = cpu->rvbar;
+
     if (arm_feature(env, ARM_FEATURE_AARCH64)) {
         /* 64 bit CPUs always start in 64 bit mode */
         env->aarch64 = 1;
@@ -199,8 +202,10 @@ static void arm_cpu_reset(CPUState *s)
         /* Unlike A/R profile, M profile defines the reset LR value */
         env->regs[14] = 0xffffffff;
 
-        /* Load the initial SP and PC from the vector table at address 0 */
-        rom = rom_ptr(0);
+        /* Load the initial SP and PC from the vector table at address 0.
+           For LuaQEMU we want to be able to use a non 0 address here, hence
+           we abuse rvbar from aarch64, which is 0 by default, to get this behaviour */
+        rom = rom_ptr(cpu->rvbar);
         if (rom) {
             /* Address zero is covered by ROM which hasn't yet been
              * copied into physical memory.
@@ -1087,6 +1092,29 @@ static const ARMCPRegInfo cortexr5_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
+static void cortex_r4_initfn(Object *obj)
+{
+    ARMCPU *cpu = ARM_CPU(obj);
+    set_feature(&cpu->env, ARM_FEATURE_V7);
+    set_feature(&cpu->env, ARM_FEATURE_THUMB_DIV);
+    set_feature(&cpu->env, ARM_FEATURE_PMSA);
+    cpu->midr = 0x411FC144; /* r1p4 */
+    cpu->id_pfr0 = 0x0131;
+    cpu->id_pfr1 = 0x001;
+    cpu->id_dfr0 = 0x010400;
+    cpu->id_afr0 = 0x0;
+    cpu->id_mmfr0 = 0x0210030;
+    cpu->id_mmfr1 = 0x00000000;
+    cpu->id_mmfr2 = 0x01200000;
+    cpu->id_mmfr3 = 0x0211;
+    cpu->id_isar0 = 0x1101111;
+    cpu->id_isar1 = 0x13112111;
+    cpu->id_isar2 = 0x21232131;
+    cpu->id_isar3 = 0x01112131;
+    cpu->id_isar4 = 0x0010142;
+    cpu->id_isar5 = 0x0;
+}
+
 static void cortex_r5_initfn(Object *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
@@ -1555,6 +1583,7 @@ static const ARMCPUInfo arm_cpus[] = {
                              .class_init = arm_v7m_class_init },
     { .name = "cortex-m4",   .initfn = cortex_m4_initfn,
                              .class_init = arm_v7m_class_init },
+    { .name = "cortex-r4",   .initfn = cortex_r4_initfn },
     { .name = "cortex-r5",   .initfn = cortex_r5_initfn },
     { .name = "cortex-a7",   .initfn = cortex_a7_initfn },
     { .name = "cortex-a8",   .initfn = cortex_a8_initfn },
@@ -1638,6 +1667,7 @@ static void arm_cpu_class_init(ObjectClass *oc, void *data)
     cc->has_work = arm_cpu_has_work;
     cc->cpu_exec_interrupt = arm_cpu_exec_interrupt;
     cc->dump_state = arm_cpu_dump_state;
+    cc->cpu_state_hash = arm_cpu_state_hash;
     cc->set_pc = arm_cpu_set_pc;
     cc->gdb_read_register = arm_cpu_gdb_read_register;
     cc->gdb_write_register = arm_cpu_gdb_write_register;

@@ -158,6 +158,7 @@ typedef struct CPUClass {
                            uint8_t *buf, int len, bool is_write);
     void (*dump_state)(CPUState *cpu, FILE *f, fprintf_function cpu_fprintf,
                        int flags);
+    uint64_t (*cpu_state_hash)(CPUState *cpu, int flags);
     GuestPanicInformation* (*get_crash_info)(CPUState *cpu);
     void (*dump_statistics)(CPUState *cpu, FILE *f,
                             fprintf_function cpu_fprintf, int flags);
@@ -232,6 +233,14 @@ struct KVMState;
 struct kvm_run;
 
 struct hax_vcpu_state;
+
+struct CPURecordState {
+    GHashTable *cpu_states;
+    uint64_t miss_count; /* current count of state hits that were already contained */
+    uint64_t miss_max; /* maximum state hits that were already contained */
+    uint64_t ns; /* number of states saved */
+    void (*state_cb)(const CPUState *cpu); /* callback to be called if miss_max is reached */
+};
 
 #define TB_JMP_CACHE_BITS 12
 #define TB_JMP_CACHE_SIZE (1 << TB_JMP_CACHE_BITS)
@@ -404,6 +413,8 @@ struct CPUState {
 
     struct hax_vcpu_state *hax_vcpu;
 
+    struct CPURecordState crs;
+
     /* The pending_tlb_flush flag is set and cleared atomically to
      * avoid potential races. The aim of the flag is to avoid
      * unnecessary flushes.
@@ -518,6 +529,15 @@ enum CPUDumpFlags {
     CPU_DUMP_FPU  = 0x00020000,
     CPU_DUMP_CCOP = 0x00040000,
 };
+
+/**
+ * record_cpu_state
+ * @cpu: The CPU whose state is to be hashed
+ * @flags: Flags
+ *
+ * records a hash of the CPU state and issues notification on no change
+ */
+void record_cpu_state(CPUState *cpu, int flags);
 
 /**
  * cpu_dump_state:
@@ -970,7 +990,8 @@ void cpu_single_step(CPUState *cpu, int enabled);
 /* 0x08 currently unused */
 #define BP_GDB                0x10
 #define BP_CPU                0x20
-#define BP_ANY                (BP_GDB | BP_CPU)
+#define BP_LUA                0x40
+#define BP_ANY                (BP_GDB | BP_CPU | BP_LUA)
 #define BP_WATCHPOINT_HIT_READ 0x40
 #define BP_WATCHPOINT_HIT_WRITE 0x80
 #define BP_WATCHPOINT_HIT (BP_WATCHPOINT_HIT_READ | BP_WATCHPOINT_HIT_WRITE)
